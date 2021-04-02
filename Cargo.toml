@@ -14,6 +14,8 @@ embedded-graphics = "0.6.2"
 cortex-m-rt = "0.6.13"
 ili9341 = "0.4.1"
 nb = "0.1.2"
+rand_core = "0.6.2"
+wyhash = "0.5.0"
 
 [dependencies.rtt-target]
 version = "0.3.0"
@@ -42,6 +44,10 @@ features = ["stm32f103", "rt", "medium"]
 [[example]]
 name = "display-test1"
 path = "examples/display-test1.rs"
+
+[[example]]
+name = "display-test2"
+path = "examples/display-test2.rs"
 
 [[example]]
 name = "led-test1"
