@@ -4,6 +4,10 @@ version = "0.1.0"
 authors = ["Sergey Matyukevich <geomatsi@gmail.com>"]
 edition = "2018"
 
+autobins = false
+autotests = false
+autoexamples = false
+
 [dependencies]
 display-interface-parallel-gpio = "0.4.1"
 embedded-graphics = "0.6.2"
@@ -32,3 +36,13 @@ features=["unproven"]
 [dependencies.stm32f1xx-hal]
 version = "0.7.0"
 features = ["stm32f103", "rt", "medium"]
+
+# examples
+
+[[example]]
+name = "display-test1"
+path = "examples/display-test1.rs"
+
+[[example]]
+name = "led-test1"
+path = "examples/led-test1.rs"
