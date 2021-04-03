@@ -39,6 +39,12 @@ features=["unproven"]
 version = "0.7.0"
 features = ["stm32f103", "rt", "medium"]
 
+# bins
+
+[[bin]]
+name = "particles-v1"
+path = "src/bin/particles-v1.rs"
+
 # examples
 
 [[example]]
