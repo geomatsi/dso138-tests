@@ -1,5 +1,5 @@
 [package]
-name = "dso-138-tests"
+name = "dso138_tests"
 version = "0.1.0"
 authors = ["Sergey Matyukevich <geomatsi@gmail.com>"]
 edition = "2018"
@@ -42,8 +42,8 @@ features = ["stm32f103", "rt", "medium"]
 # bins
 
 [[bin]]
-name = "particles-v1"
-path = "src/bin/particles-v1.rs"
+name = "particles1"
+path = "src/bin/particles1.rs"
 
 # examples
 

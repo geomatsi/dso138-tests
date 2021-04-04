@@ -4,6 +4,7 @@
 use cortex_m as cm;
 use cortex_m_rt as rt;
 use display_interface_parallel_gpio::PGPIO8BitInterface;
+use dso138_tests::phys::particles::{Particle, ParticleColor};
 use embedded_graphics::pixelcolor::Rgb565;
 use embedded_graphics::prelude::*;
 use embedded_graphics::primitives::{Circle, Rectangle};
@@ -21,56 +22,21 @@ use wyhash::WyRng;
 
 const PNUM: usize = 20;
 
-struct Particle {
-    px: i32,
-    py: i32,
-    vx: i32,
-    vy: i32,
-    pr: i32,
-    dt: i32,
-}
-
-impl Default for Particle {
-    fn default() -> Particle {
-        Particle {
-            px: 0,
-            py: 0,
-            vx: 0,
-            vy: 0,
-            pr: 5,
-            dt: 1,
-        }
+fn get_color(p: &Particle) -> PrimitiveStyle<Rgb565> {
+    match p.get_color() {
+        ParticleColor::GREEN => PrimitiveStyle::with_fill(Rgb565::GREEN),
+        ParticleColor::RED => PrimitiveStyle::with_fill(Rgb565::RED),
+        ParticleColor::BLUE => PrimitiveStyle::with_fill(Rgb565::BLUE),
+        ParticleColor::YELLOW => PrimitiveStyle::with_fill(Rgb565::YELLOW),
+        ParticleColor::WHITE => PrimitiveStyle::with_fill(Rgb565::WHITE),
     }
 }
 
-impl Particle {
-    fn new(px: i32, py: i32, vx: i32, vy: i32, pr: i32, dt: i32) -> Particle {
-        Particle {
-            px,
-            py,
-            vx,
-            vy,
-            pr,
-            dt,
-        }
-    }
-
-    fn step(&mut self) {
-        self.px += self.vx * self.dt;
-        self.py += self.vy * self.dt;
-    }
-
-    fn rebound(&mut self, cx: i32, cy: i32) {
-        self.vx *= cx;
-        self.vy *= cy;
-    }
-
-    fn area(&self) -> (Point, Point) {
-        (
-            Point::new(self.px - self.pr, self.py - self.pr),
-            Point::new(self.px + self.pr, self.py + self.pr),
-        )
-    }
+fn area(p: &Particle) -> (Point, Point) {
+    (
+        Point::new(p.get_x() - p.get_r(), p.get_y() - p.get_r()),
+        Point::new(p.get_x() + p.get_r(), p.get_y() + p.get_r()),
+    )
 }
 
 #[entry]
@@ -122,13 +88,11 @@ fn main() -> ! {
 
     let pio8bit = PGPIO8BitInterface::new(p0, p1, p2, p3, p4, p5, p6, p7, rs, nwr);
     let mut display = Ili9341::new(pio8bit, nreset, &mut delay).unwrap();
+    let fc = PrimitiveStyle::with_fill(Rgb565::BLACK);
     let h = display.height() as i32;
     let w = display.width() as i32;
 
     display.set_orientation(Orientation::Portrait).unwrap();
-
-    let fc = PrimitiveStyle::with_fill(Rgb565::BLACK);
-    let pc = PrimitiveStyle::with_fill(Rgb565::GREEN);
 
     // black screen
     Rectangle::new(Point::new(0, 0), Point::new(w, h))
@@ -138,37 +102,73 @@ fn main() -> ! {
 
     let mut ens: [Particle; PNUM] = Default::default();
     let mut rng = WyRng::default();
-    let mut b: [u8; 4] = [0; 4];
+    let mut rnd: [u8; 4] = [0; 4];
 
-    for i in 0..PNUM {
-        rng.fill_bytes(&mut b);
-        ens[i].px = (b[0] >> 1) as i32;
-        ens[i].py = (b[1] >> 1) as i32;
-        ens[i].vx = ((b[2] & 0xF) + 1) as i32;
-        ens[i].vy = ((b[3] & 0xF) + 1) as i32;
+    // randomize particles position and velocity
+    for p in ens.iter_mut() {
+        rng.fill_bytes(&mut rnd);
+        *p = Particle::new(
+            (rnd[0] >> 1) as i32,
+            (rnd[1] >> 1) as i32,
+            ((rnd[2] & 0xF) + 1) as i32,
+            ((rnd[3] & 0xF) + 1) as i32,
+            5,
+            1,
+            ParticleColor::GREEN,
+        );
     }
 
+    // customize several particles colors to make their motion easier to see
+    ens[0].set_color(ParticleColor::RED);
+    ens[5].set_color(ParticleColor::BLUE);
+    ens[10].set_color(ParticleColor::YELLOW);
+    ens[15].set_color(ParticleColor::WHITE);
+
+    let mut collisions: u64 = 0;
+
     loop {
-        rprintln!("step");
+        let mut energy: u64 = 0;
+
+        for p in ens.iter_mut().take(PNUM) {
+            energy += p.energy();
+        }
+
+        rprintln!("energy: {} collisions: {}", energy, collisions);
+
+        for i in 0..PNUM {
+            let (head, tail) = ens.split_at_mut(i + 1);
+            let p = &mut head[i];
+
+            if p.collided() {
+                continue;
+            }
+
+            if Particle::bounce(p, w, h) {
+                continue;
+            }
+
+            for q in tail {
+                if q.collided() {
+                    continue;
+                }
+
+                if Particle::collide(p, q) {
+                    collisions += 1;
+                    break;
+                }
+            }
+        }
 
         for p in &mut ens {
-            Rectangle::new(p.area().0, p.area().1)
+            Rectangle::new(area(p).0, area(p).1)
                 .into_styled(fc)
                 .draw(&mut display)
                 .unwrap();
 
             p.step();
 
-            if p.px > w || p.px < 0 {
-                p.rebound(-1, 1)
-            }
-
-            if p.py > h || p.py < 0 {
-                p.rebound(1, -1)
-            }
-
-            Circle::new(Point::new(p.px, p.py), p.pr as u32)
-                .into_styled(pc)
+            Circle::new(Point::new(p.get_x(), p.get_y()), p.get_r() as u32)
+                .into_styled(get_color(p))
                 .draw(&mut display)
                 .unwrap();
         }

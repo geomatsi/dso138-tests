@@ -153,7 +153,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "dso-138-tests"
+name = "dso138_tests"
 version = "0.1.0"
 dependencies = [
  "cortex-m 0.7.2",
