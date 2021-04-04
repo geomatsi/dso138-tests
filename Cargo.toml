@@ -45,6 +45,10 @@ features = ["stm32f103", "rt", "medium"]
 name = "particles1"
 path = "src/bin/particles1.rs"
 
+[[bin]]
+name = "particles2"
+path = "src/bin/particles2.rs"
+
 # examples
 
 [[example]]
