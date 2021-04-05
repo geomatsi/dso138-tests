@@ -18,7 +18,7 @@ use rt::entry;
 use rtt_target::{rprintln, rtt_init_print};
 use stm32f1xx_hal as hal;
 
-fn get_color(p: &Particle) -> PrimitiveStyle<Rgb565> {
+fn get_color(p: &Particle<i32>) -> PrimitiveStyle<Rgb565> {
     match p.get_color() {
         ParticleColor::GREEN => PrimitiveStyle::with_fill(Rgb565::GREEN),
         ParticleColor::RED => PrimitiveStyle::with_fill(Rgb565::RED),
@@ -28,7 +28,7 @@ fn get_color(p: &Particle) -> PrimitiveStyle<Rgb565> {
     }
 }
 
-fn area(p: &Particle) -> (Point, Point) {
+fn area(p: &Particle<i32>) -> (Point, Point) {
     (
         Point::new(p.get_x() - p.get_r(), p.get_y() - p.get_r()),
         Point::new(p.get_x() + p.get_r(), p.get_y() + p.get_r()),
@@ -96,7 +96,7 @@ fn main() -> ! {
         .draw(&mut display)
         .unwrap();
 
-    let mut ens: [Particle; 4] = [
+    let mut ens: [Particle<i32>; 4] = [
         Particle::new(100, 50, 0, -5, 10, 1, ParticleColor::GREEN),
         Particle::new(100, 100, 0, -8, 10, 1, ParticleColor::RED),
         Particle::new(100, 150, 0, 5, 10, 1, ParticleColor::BLUE),
@@ -109,7 +109,7 @@ fn main() -> ! {
         let mut energy: u64 = 0;
 
         for p in ens.iter_mut() {
-            energy += p.energy();
+            energy += p.energy() as u64;
         }
 
         rprintln!("energy: {} collisions: {}", energy, collisions);

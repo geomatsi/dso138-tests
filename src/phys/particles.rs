@@ -1,3 +1,5 @@
+use num_traits::Num;
+
 #[derive(Debug, Clone, Copy)]
 pub enum ParticleColor {
     GREEN,
@@ -7,35 +9,32 @@ pub enum ParticleColor {
     WHITE,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct Particle {
-    px: i32,
-    py: i32,
-    vx: i32,
-    vy: i32,
-    dt: i32,
-    r: i32,
+impl Default for ParticleColor {
+    fn default() -> ParticleColor {
+        ParticleColor::GREEN
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Particle<N>
+where
+    N: Default + Copy + Clone + Num + PartialOrd,
+{
+    px: N,
+    py: N,
+    vx: N,
+    vy: N,
+    dt: N,
+    r: N,
     m: bool,
     c: ParticleColor,
 }
 
-impl Default for Particle {
-    fn default() -> Particle {
-        Particle {
-            px: 0,
-            py: 0,
-            vx: 0,
-            vy: 0,
-            dt: 1,
-            r: 5,
-            m: false,
-            c: ParticleColor::GREEN,
-        }
-    }
-}
-
-impl Particle {
-    pub fn new(px: i32, py: i32, vx: i32, vy: i32, r: i32, dt: i32, c: ParticleColor) -> Particle {
+impl<N> Particle<N>
+where
+    N: Default + Copy + Clone + Num + PartialOrd,
+{
+    pub fn new(px: N, py: N, vx: N, vy: N, r: N, dt: N, c: ParticleColor) -> Particle<N> {
         Particle {
             px,
             py,
@@ -48,15 +47,15 @@ impl Particle {
         }
     }
 
-    pub fn get_x(&self) -> i32 {
+    pub fn get_x(&self) -> N {
         self.px
     }
 
-    pub fn get_y(&self) -> i32 {
+    pub fn get_y(&self) -> N {
         self.py
     }
 
-    pub fn get_r(&self) -> i32 {
+    pub fn get_r(&self) -> N {
         self.r
     }
 
@@ -69,18 +68,13 @@ impl Particle {
     }
 
     pub fn step(&mut self) {
-        self.px += self.vx * self.dt;
-        self.py += self.vy * self.dt;
+        self.px = self.px + self.vx * self.dt;
+        self.py = self.py + self.vy * self.dt;
         self.m = false;
     }
 
-    pub fn reflect(&mut self, cx: i32, cy: i32) {
-        self.vx *= cx;
-        self.vy *= cy;
-    }
-
-    pub fn energy(&self) -> u64 {
-        (self.vx * self.vx + self.vy * self.vy) as u64
+    pub fn energy(&self) -> N {
+        self.vx * self.vx + self.vy * self.vy
     }
 
     pub fn collided(&self) -> bool {
@@ -88,32 +82,32 @@ impl Particle {
     }
 
     // perfectly elastic collision of two equal round particles
-    pub fn collide(p: &mut Particle, q: &mut Particle) -> bool {
+    pub fn collide(p: &mut Particle<N>, q: &mut Particle<N>) -> bool {
         let dx = p.px - q.px;
         let dy = p.py - q.py;
         let rr = dx * dx + dy * dy;
         let dx1 = (p.px + p.vx) - (q.px + q.vx);
         let dy1 = (p.py + p.vy) - (q.py + q.vy);
 
-        if rr == 0 {
+        if rr > (p.r + p.r) * (p.r + p.r) {
+            return false;
+        }
+
+        if rr < dx1 * dx1 + dy1 * dy1 {
+            return false;
+        }
+
+        if N::is_zero(&rr) {
             p.m = true;
             q.m = true;
             return true;
         }
 
-        if dx * dx + dy * dy > 4 * p.r * p.r {
-            return false;
-        }
+        let nvx: N = p.vx + (dx * dx * (q.vx - p.vx) + dx * dy * (q.vy - p.vy)) / rr;
+        let nvy: N = p.vy + (dy * dy * (q.vy - p.vy) + dx * dy * (q.vx - p.vx)) / rr;
 
-        if dx * dx + dy * dy < dx1 * dx1 + dy1 * dy1 {
-            return false;
-        }
-
-        let nvx: i32 = p.vx + (dx * dx * (q.vx - p.vx) + dx * dy * (q.vy - p.vy)) / rr;
-        let nvy: i32 = p.vy + (dy * dy * (q.vy - p.vy) + dx * dy * (q.vx - p.vx)) / rr;
-
-        let nwx: i32 = q.vx + (dx * dx * (p.vx - q.vx) + dx * dy * (p.vy - q.vy)) / rr;
-        let nwy: i32 = q.vy + (dy * dy * (p.vy - q.vy) + dx * dy * (p.vx - q.vx)) / rr;
+        let nwx: N = q.vx + (dx * dx * (p.vx - q.vx) + dx * dy * (p.vy - q.vy)) / rr;
+        let nwy: N = q.vy + (dy * dy * (p.vy - q.vy) + dx * dy * (p.vx - q.vx)) / rr;
 
         p.vx = nvx;
         p.vy = nvy;
@@ -127,30 +121,30 @@ impl Particle {
     }
 
     // bounce from the walls
-    pub fn bounce(p: &mut Particle, w: i32, h: i32) -> bool {
+    pub fn bounce(p: &mut Particle<N>, w: N, h: N) -> bool {
         let mut res = false;
 
         if p.px >= w {
-            p.reflect(-1, 1);
+            p.vx = N::zero() - p.vx;
             p.px = w;
             res = true;
         }
 
-        if p.px <= 0 {
-            p.reflect(-1, 1);
-            p.px = 0;
+        if p.px <= N::zero() {
+            p.vx = N::zero() - p.vx;
+            p.px = N::zero();
             res = true;
         }
 
         if p.py >= h {
-            p.reflect(1, -1);
+            p.vy = N::zero() - p.vy;
             p.py = h;
             res = true;
         }
 
-        if p.py <= 0 {
-            p.reflect(1, -1);
-            p.py = 0;
+        if p.py <= N::zero() {
+            p.vy = N::zero() - p.vy;
+            p.py = N::zero();
             res = true;
         }
 

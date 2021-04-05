@@ -20,9 +20,10 @@ use rtt_target::{rprintln, rtt_init_print};
 use stm32f1xx_hal as hal;
 use wyhash::WyRng;
 
+type T = f32;
 const PNUM: usize = 20;
 
-fn get_color(p: &Particle) -> PrimitiveStyle<Rgb565> {
+fn get_color(p: &Particle<T>) -> PrimitiveStyle<Rgb565> {
     match p.get_color() {
         ParticleColor::GREEN => PrimitiveStyle::with_fill(Rgb565::GREEN),
         ParticleColor::RED => PrimitiveStyle::with_fill(Rgb565::RED),
@@ -32,10 +33,16 @@ fn get_color(p: &Particle) -> PrimitiveStyle<Rgb565> {
     }
 }
 
-fn area(p: &Particle) -> (Point, Point) {
+fn area(p: &Particle<T>) -> (Point, Point) {
     (
-        Point::new(p.get_x() - p.get_r(), p.get_y() - p.get_r()),
-        Point::new(p.get_x() + p.get_r(), p.get_y() + p.get_r()),
+        Point::new(
+            (p.get_x() - p.get_r()) as i32,
+            (p.get_y() - p.get_r()) as i32,
+        ),
+        Point::new(
+            (p.get_x() + p.get_r()) as i32,
+            (p.get_y() + p.get_r()) as i32,
+        ),
     )
 }
 
@@ -89,18 +96,18 @@ fn main() -> ! {
     let pio8bit = PGPIO8BitInterface::new(p0, p1, p2, p3, p4, p5, p6, p7, rs, nwr);
     let mut display = Ili9341::new(pio8bit, nreset, &mut delay).unwrap();
     let fc = PrimitiveStyle::with_fill(Rgb565::BLACK);
-    let h = display.height() as i32;
-    let w = display.width() as i32;
+    let h = display.height() as T;
+    let w = display.width() as T;
 
     display.set_orientation(Orientation::Portrait).unwrap();
 
     // black screen
-    Rectangle::new(Point::new(0, 0), Point::new(w, h))
+    Rectangle::new(Point::new(0, 0), Point::new(w as i32, h as i32))
         .into_styled(fc)
         .draw(&mut display)
         .unwrap();
 
-    let mut ens: [Particle; PNUM] = Default::default();
+    let mut ens: [Particle<T>; PNUM] = Default::default();
     let mut rng = WyRng::default();
     let mut rnd: [u8; 4] = [0; 4];
 
@@ -108,26 +115,26 @@ fn main() -> ! {
     for p in ens.iter_mut() {
         rng.fill_bytes(&mut rnd);
         *p = Particle::new(
-            (rnd[0] >> 1) as i32,
-            (rnd[1] >> 1) as i32,
-            ((rnd[2] & 0xF) + 1) as i32,
-            ((rnd[3] & 0xF) + 1) as i32,
-            5,
-            1,
+            (rnd[0] >> 1) as T,
+            (rnd[1] >> 1) as T,
+            ((rnd[2] & 0xF) + 1) as T,
+            ((rnd[3] & 0xF) + 1) as T,
+            4.0,
+            0.1,
             ParticleColor::GREEN,
         );
     }
 
     // customize several particles colors to make their motion easier to see
     ens[0].set_color(ParticleColor::RED);
-    ens[5].set_color(ParticleColor::BLUE);
-    ens[10].set_color(ParticleColor::YELLOW);
-    ens[15].set_color(ParticleColor::WHITE);
+    ens[1].set_color(ParticleColor::BLUE);
+    ens[2].set_color(ParticleColor::YELLOW);
+    ens[3].set_color(ParticleColor::WHITE);
 
     let mut collisions: u64 = 0;
 
     loop {
-        let mut energy: u64 = 0;
+        let mut energy: T= 0.0;
 
         for p in ens.iter_mut().take(PNUM) {
             energy += p.energy();
@@ -167,13 +174,15 @@ fn main() -> ! {
 
             p.step();
 
-            Circle::new(Point::new(p.get_x(), p.get_y()), p.get_r() as u32)
-                .into_styled(get_color(p))
-                .draw(&mut display)
-                .unwrap();
+            Circle::new(
+                Point::new(p.get_x() as i32, p.get_y() as i32),
+                p.get_r() as u32,
+            )
+            .into_styled(get_color(p))
+            .draw(&mut display)
+            .unwrap();
         }
 
-        delay.delay_ms(10u16);
         led.toggle().unwrap();
     }
 }
