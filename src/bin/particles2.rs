@@ -20,11 +20,11 @@ use stm32f1xx_hal as hal;
 
 fn get_color(p: &Particle<i32>) -> PrimitiveStyle<Rgb565> {
     match p.get_color() {
-        ParticleColor::GREEN => PrimitiveStyle::with_fill(Rgb565::GREEN),
-        ParticleColor::RED => PrimitiveStyle::with_fill(Rgb565::RED),
-        ParticleColor::BLUE => PrimitiveStyle::with_fill(Rgb565::BLUE),
-        ParticleColor::YELLOW => PrimitiveStyle::with_fill(Rgb565::YELLOW),
-        ParticleColor::WHITE => PrimitiveStyle::with_fill(Rgb565::WHITE),
+        ParticleColor::Green => PrimitiveStyle::with_fill(Rgb565::GREEN),
+        ParticleColor::Red => PrimitiveStyle::with_fill(Rgb565::RED),
+        ParticleColor::Blue => PrimitiveStyle::with_fill(Rgb565::BLUE),
+        ParticleColor::Yellow => PrimitiveStyle::with_fill(Rgb565::YELLOW),
+        ParticleColor::White => PrimitiveStyle::with_fill(Rgb565::WHITE),
     }
 }
 
@@ -97,10 +97,10 @@ fn main() -> ! {
         .unwrap();
 
     let mut ens: [Particle<i32>; 4] = [
-        Particle::new(100, 50, 0, -5, 10, 1, ParticleColor::GREEN),
-        Particle::new(100, 100, 0, -8, 10, 1, ParticleColor::RED),
-        Particle::new(100, 150, 0, 5, 10, 1, ParticleColor::BLUE),
-        Particle::new(100, 200, 0, 8, 10, 1, ParticleColor::YELLOW),
+        Particle::new(100, 50, 0, -4, 10, 1, ParticleColor::Green),
+        Particle::new(100, 100, 0, -5, 10, 1, ParticleColor::Red),
+        Particle::new(100, 150, 0, 5, 10, 1, ParticleColor::Blue),
+        Particle::new(100, 200, 0, 4, 10, 1, ParticleColor::Yellow),
     ];
 
     let mut collisions: u64 = 0;
@@ -122,7 +122,7 @@ fn main() -> ! {
                 continue;
             }
 
-            if Particle::bounce(p, w, h) {
+            if Particle::bounce(p, 0, w, 0, h) {
                 continue;
             }
 

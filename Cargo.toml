@@ -16,10 +16,7 @@ ili9341 = "0.4.1"
 nb = "0.1.2"
 rand_core = "0.6.2"
 wyhash = "0.5.0"
-
-[dependencies.num-traits]
-version = "0.2"
-default-features = false
+fixed = "1.7.0"
 
 [dependencies.rtt-target]
 version = "0.3.0"
@@ -52,6 +49,10 @@ path = "src/bin/particles1.rs"
 [[bin]]
 name = "particles2"
 path = "src/bin/particles2.rs"
+
+[[bin]]
+name = "particles3"
+path = "src/bin/particles3.rs"
 
 # examples
 

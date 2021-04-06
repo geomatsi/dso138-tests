@@ -1,24 +1,25 @@
-use num_traits::Num;
+use core::ops::{Add, Div, Mul, Neg, Sub};
 
 #[derive(Debug, Clone, Copy)]
 pub enum ParticleColor {
-    GREEN,
-    RED,
-    BLUE,
-    YELLOW,
-    WHITE,
+    Green,
+    Red,
+    Blue,
+    Yellow,
+    White,
 }
 
 impl Default for ParticleColor {
     fn default() -> ParticleColor {
-        ParticleColor::GREEN
+        ParticleColor::Green
     }
 }
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Particle<N>
 where
-    N: Default + Copy + Clone + Num + PartialOrd,
+    N: Sub<Output = N> + Div<Output = N> + Mul<Output = N> + Add<Output = N> + Neg<Output = N>,
+    N: Default + Copy + Clone + PartialOrd,
 {
     px: N,
     py: N,
@@ -32,7 +33,8 @@ where
 
 impl<N> Particle<N>
 where
-    N: Default + Copy + Clone + Num + PartialOrd,
+    N: Sub<Output = N> + Div<Output = N> + Mul<Output = N> + Add<Output = N> + Neg<Output = N>,
+    N: Default + Copy + Clone + PartialOrd,
 {
     pub fn new(px: N, py: N, vx: N, vy: N, r: N, dt: N, c: ParticleColor) -> Particle<N> {
         Particle {
@@ -82,32 +84,33 @@ where
     }
 
     // perfectly elastic collision of two equal round particles
+    #[allow(clippy::suspicious_operation_groupings)]
     pub fn collide(p: &mut Particle<N>, q: &mut Particle<N>) -> bool {
         let dx = p.px - q.px;
         let dy = p.py - q.py;
-        let rr = dx * dx + dy * dy;
-        let dx1 = (p.px + p.vx) - (q.px + q.vx);
-        let dy1 = (p.py + p.vy) - (q.py + q.vy);
+        let dx1 = (p.px + p.dt * p.vx) - (q.px + q.dt * q.vx);
+        let dy1 = (p.py + p.dt * p.vy) - (q.py + q.dt * q.vy);
 
-        if rr > (p.r + p.r) * (p.r + p.r) {
+        if dx * dx + dy * dy > (p.r + p.r) * (p.r + p.r) {
             return false;
         }
 
-        if rr < dx1 * dx1 + dy1 * dy1 {
+        if dx * dx + dy * dy < dx1 * dx1 + dy1 * dy1 {
             return false;
         }
 
-        if N::is_zero(&rr) {
-            p.m = true;
-            q.m = true;
-            return true;
-        }
-
-        let nvx: N = p.vx + (dx * dx * (q.vx - p.vx) + dx * dy * (q.vy - p.vy)) / rr;
-        let nvy: N = p.vy + (dy * dy * (q.vy - p.vy) + dx * dy * (q.vx - p.vx)) / rr;
-
-        let nwx: N = q.vx + (dx * dx * (p.vx - q.vx) + dx * dy * (p.vy - q.vy)) / rr;
-        let nwy: N = q.vy + (dy * dy * (p.vy - q.vy) + dx * dy * (p.vx - q.vx)) / rr;
+        let (nvx, nvy, nwx, nwy) = if dx * dx + dy * dy < p.r * p.r {
+            // 'mutual exchange' approximation: particles are too close due to discrete time
+            (q.vx, q.vy, p.vx, q.vy)
+        } else {
+            // precise calculation of two round colliding particles
+            (
+                p.vx + (dx * dx * (q.vx - p.vx) + dx * dy * (q.vy - p.vy)) / (dx * dx + dy * dy),
+                p.vy + (dy * dy * (q.vy - p.vy) + dx * dy * (q.vx - p.vx)) / (dx * dx + dy * dy),
+                q.vx + (dx * dx * (p.vx - q.vx) + dx * dy * (p.vy - q.vy)) / (dx * dx + dy * dy),
+                q.vy + (dy * dy * (p.vy - q.vy) + dx * dy * (p.vx - q.vx)) / (dx * dx + dy * dy),
+            )
+        };
 
         p.vx = nvx;
         p.vy = nvy;
@@ -121,30 +124,30 @@ where
     }
 
     // bounce from the walls
-    pub fn bounce(p: &mut Particle<N>, w: N, h: N) -> bool {
+    pub fn bounce(p: &mut Particle<N>, wmin: N, wmax: N, hmin: N, hmax: N) -> bool {
         let mut res = false;
 
-        if p.px >= w {
-            p.vx = N::zero() - p.vx;
-            p.px = w;
+        if p.px >= wmax {
+            p.vx = p.vx.neg();
+            p.px = wmax;
             res = true;
         }
 
-        if p.px <= N::zero() {
-            p.vx = N::zero() - p.vx;
-            p.px = N::zero();
+        if p.px <= wmin {
+            p.vx = p.vx.neg();
+            p.px = wmin;
             res = true;
         }
 
-        if p.py >= h {
-            p.vy = N::zero() - p.vy;
-            p.py = h;
+        if p.py >= hmax {
+            p.vy = p.vy.neg();
+            p.py = hmax;
             res = true;
         }
 
-        if p.py <= N::zero() {
-            p.vy = N::zero() - p.vy;
-            p.py = N::zero();
+        if p.py <= hmin {
+            p.vy = p.vy.neg();
+            p.py = hmin;
             res = true;
         }
 

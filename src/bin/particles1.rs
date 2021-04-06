@@ -20,16 +20,18 @@ use rtt_target::{rprintln, rtt_init_print};
 use stm32f1xx_hal as hal;
 use wyhash::WyRng;
 
+const PNUM: usize = 30;
+
+// colliding particles: floating point arithmetic
 type T = f32;
-const PNUM: usize = 20;
 
 fn get_color(p: &Particle<T>) -> PrimitiveStyle<Rgb565> {
     match p.get_color() {
-        ParticleColor::GREEN => PrimitiveStyle::with_fill(Rgb565::GREEN),
-        ParticleColor::RED => PrimitiveStyle::with_fill(Rgb565::RED),
-        ParticleColor::BLUE => PrimitiveStyle::with_fill(Rgb565::BLUE),
-        ParticleColor::YELLOW => PrimitiveStyle::with_fill(Rgb565::YELLOW),
-        ParticleColor::WHITE => PrimitiveStyle::with_fill(Rgb565::WHITE),
+        ParticleColor::Green => PrimitiveStyle::with_fill(Rgb565::GREEN),
+        ParticleColor::Red => PrimitiveStyle::with_fill(Rgb565::RED),
+        ParticleColor::Blue => PrimitiveStyle::with_fill(Rgb565::BLUE),
+        ParticleColor::Yellow => PrimitiveStyle::with_fill(Rgb565::YELLOW),
+        ParticleColor::White => PrimitiveStyle::with_fill(Rgb565::WHITE),
     }
 }
 
@@ -119,22 +121,22 @@ fn main() -> ! {
             (rnd[1] >> 1) as T,
             ((rnd[2] & 0xF) + 1) as T,
             ((rnd[3] & 0xF) + 1) as T,
-            4.0,
+            3.0,
             0.1,
-            ParticleColor::GREEN,
+            ParticleColor::Green,
         );
     }
 
     // customize several particles colors to make their motion easier to see
-    ens[0].set_color(ParticleColor::RED);
-    ens[1].set_color(ParticleColor::BLUE);
-    ens[2].set_color(ParticleColor::YELLOW);
-    ens[3].set_color(ParticleColor::WHITE);
+    ens[0].set_color(ParticleColor::Red);
+    ens[1].set_color(ParticleColor::Blue);
+    ens[2].set_color(ParticleColor::Yellow);
+    ens[3].set_color(ParticleColor::White);
 
     let mut collisions: u64 = 0;
 
     loop {
-        let mut energy: T= 0.0;
+        let mut energy: T = 0.0;
 
         for p in ens.iter_mut().take(PNUM) {
             energy += p.energy();
@@ -150,7 +152,7 @@ fn main() -> ! {
                 continue;
             }
 
-            if Particle::bounce(p, w, h) {
+            if Particle::bounce(p, 0.0, w, 0.0, h) {
                 continue;
             }
 
