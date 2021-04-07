@@ -67,3 +67,7 @@ path = "examples/display-test2.rs"
 [[example]]
 name = "led-test1"
 path = "examples/led-test1.rs"
+
+[[example]]
+name = "buttons-test1"
+path = "examples/buttons-test1.rs"
