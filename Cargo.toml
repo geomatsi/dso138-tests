@@ -54,6 +54,10 @@ path = "src/bin/particles2.rs"
 name = "particles3"
 path = "src/bin/particles3.rs"
 
+[[bin]]
+name = "squash"
+path = "src/bin/squash.rs"
+
 # examples
 
 [[example]]
