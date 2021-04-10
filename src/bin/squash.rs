@@ -6,10 +6,11 @@ use cortex_m as cm;
 use display_interface_parallel_gpio::PGPIO8BitInterface;
 use dso138_tests::hw::delay_timer::DelayTimer;
 use dso138_tests::phys::particles::{Particle, ParticleColor};
+use embedded_graphics::fonts::{Font12x16, Text};
 use embedded_graphics::pixelcolor::Rgb565;
 use embedded_graphics::prelude::*;
-use embedded_graphics::primitives::{Circle, Rectangle};
-use embedded_graphics::style::PrimitiveStyle;
+use embedded_graphics::primitives::Rectangle;
+use embedded_graphics::style::{PrimitiveStyle, TextStyleBuilder};
 use embedded_hal::digital::v2::InputPin;
 use embedded_hal::digital::v2::OutputPin;
 use hal::gpio::gpioa::PA15;
@@ -48,7 +49,7 @@ type DisplayType = Ili9341<
 
 /* cpu sysclk: 72 MHz (no external quartz) */
 
-const PROC_PERIOD: u32 = 72_0000; /* 10 msec */
+const STEP_PERIOD: u32 = 72_0000; /* 10 msec */
 
 #[app(device = stm32f1xx_hal::stm32, peripherals = true, monotonic = rtic::cyccnt::CYCCNT)]
 const APP: () = {
@@ -62,8 +63,6 @@ const APP: () = {
         cb3: bool,
         #[init(false)]
         cb4: bool,
-        #[init(120)]
-        pos: i32,
 
         // late resources
         display: DisplayType,
@@ -74,9 +73,10 @@ const APP: () = {
         led: PA15<Output<PushPull>>,
         btmr: CountDownTimer<TIM3>,
         ball: Particle<f32>,
+        racket: i32,
     }
 
-    #[init(schedule = [proc_task])]
+    #[init(schedule = [step_task])]
     fn init(mut cx: init::Context) -> init::LateResources {
         rtt_init_print!();
 
@@ -145,25 +145,34 @@ const APP: () = {
         let pio8bit = PGPIO8BitInterface::new(p0, p1, p2, p3, p4, p5, p6, p7, rs, nwr);
         let mut display = Ili9341::new(pio8bit, nreset, &mut delay).unwrap();
 
-        display.set_orientation(Orientation::Portrait).unwrap();
+        display
+            .set_orientation(Orientation::PortraitFlipped)
+            .unwrap();
 
-        /* create ball */
+        /* create ball and racket */
 
-        let ball = Particle::<f32>::new(120.0, 160.0, 10.0, 15.0, 5.0, 0.1, ParticleColor::Blue);
+        let ball = Particle::<f32>::new(120.0, 160.0, 10.0, -15.0, 5.0, 0.1, ParticleColor::Blue);
+        let racket = 120;
 
-        /* clear screen */
+        /* initial screen */
 
-        let bg = PrimitiveStyle::with_fill(Rgb565::BLACK);
+        let ground = PrimitiveStyle::with_fill(Rgb565::BLACK);
+        let color = PrimitiveStyle::with_fill(Rgb565::GREEN);
 
         Rectangle::new(
             Point::new(0, 0),
             Point::new(display.width() as i32, display.height() as i32),
         )
-        .into_styled(bg)
+        .into_styled(ground)
         .draw(&mut display)
         .unwrap();
 
-        cx.schedule.proc_task(Instant::now()).unwrap();
+        Rectangle::new(Point::new(racket - 20, 310), Point::new(racket + 20, 320))
+            .into_styled(color)
+            .draw(&mut display)
+            .unwrap();
+
+        cx.schedule.step_task(Instant::now()).unwrap();
 
         /* init late resources */
         init::LateResources {
@@ -175,6 +184,7 @@ const APP: () = {
             led,
             ball,
             btmr,
+            racket,
         }
     }
 
@@ -222,8 +232,8 @@ const APP: () = {
         cx.resources.btmr.clear_update_interrupt_flag();
     }
 
-    #[task(schedule = [proc_task], resources = [display, ball, cb1, cb4, pos])]
-    fn proc_task(cx: proc_task::Context) {
+    #[task(schedule = [step_task], resources = [display, ball, cb1, cb4, racket])]
+    fn step_task(cx: step_task::Context) {
         let ground = PrimitiveStyle::with_fill(Rgb565::BLACK);
         let color1 = PrimitiveStyle::with_fill(Rgb565::GREEN);
         let color2 = PrimitiveStyle::with_fill(Rgb565::RED);
@@ -231,37 +241,56 @@ const APP: () = {
         let width = cx.resources.display.width() as i32;
         let display = cx.resources.display;
         let ball = cx.resources.ball;
-        let old = *cx.resources.pos;
+        let old = *cx.resources.racket;
 
         let new = match (*cx.resources.cb1, *cx.resources.cb4) {
             (true, false) => {
-                *cx.resources.pos += 5;
-                if *cx.resources.pos > width {
-                    *cx.resources.pos = width;
+                *cx.resources.racket += 5;
+                if *cx.resources.racket > width {
+                    *cx.resources.racket = width;
                 }
-                *cx.resources.pos
+                *cx.resources.racket
             }
             (false, true) => {
-                *cx.resources.pos -= 5;
-                if *cx.resources.pos < 0 {
-                    *cx.resources.pos = 0;
+                *cx.resources.racket -= 5;
+                if *cx.resources.racket < 0 {
+                    *cx.resources.racket = 0;
                 }
-                *cx.resources.pos
+                *cx.resources.racket
             }
-            _ => *cx.resources.pos,
+            _ => *cx.resources.racket,
         };
 
         if old != new {
-            rprintln!("draw: {} -> {}", old, new);
-
-            Rectangle::new(Point::new(old - 20, 0), Point::new(old + 20, 10))
+            Rectangle::new(Point::new(old - 20, 310), Point::new(old + 20, 320))
                 .into_styled(ground)
                 .draw(display)
                 .unwrap();
-            Rectangle::new(Point::new(new - 20, 0), Point::new(new + 20, 10))
+            Rectangle::new(Point::new(new - 20, 310), Point::new(new + 20, 320))
                 .into_styled(color1)
                 .draw(display)
                 .unwrap();
+        }
+
+        if Particle::<f32>::bounce(ball, 0.0, width as f32, 10.0 + ball.get_r(), height as f32) {
+            rprintln!("bounce: ({}, {})", ball.get_x(), ball.get_y());
+
+            if (ball.get_y() as i32) >= 310 + (ball.get_r() as i32)
+                && ((ball.get_x() as i32) < (new - 20) || (ball.get_x() as i32) > (new + 20))
+            {
+                let style = TextStyleBuilder::new(Font12x16)
+                    .text_color(Rgb565::YELLOW)
+                    .background_color(Rgb565::BLACK)
+                    .build();
+
+                Text::new("GAME OVER", Point::new(70, 150))
+                    .into_styled(style)
+                    .draw(display)
+                    .unwrap();
+
+                rprintln!("game over");
+                return;
+            }
         }
 
         Rectangle::new(area(ball).0, area(ball).1)
@@ -271,20 +300,13 @@ const APP: () = {
 
         ball.step();
 
-        Circle::new(
-            Point::new(ball.get_x() as i32, ball.get_y() as i32),
-            ball.get_r() as u32,
-        )
-        .into_styled(color2)
-        .draw(display)
-        .unwrap();
-
-        if Particle::<f32>::bounce(ball, 0.0, width as f32, 0.0, height as f32) {
-            rprintln!("bounce: ({}, {})", ball.get_x(), ball.get_y());
-        }
+        Rectangle::new(area(ball).0, area(ball).1)
+            .into_styled(color2)
+            .draw(display)
+            .unwrap();
 
         cx.schedule
-            .proc_task(cx.scheduled + PROC_PERIOD.cycles())
+            .step_task(cx.scheduled + STEP_PERIOD.cycles())
             .unwrap();
     }
 
