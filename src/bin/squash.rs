@@ -5,9 +5,10 @@
 use cortex_m as cm;
 use display_interface_parallel_gpio::PGPIO8BitInterface;
 use dso138_tests::hw::delay_timer::DelayTimer;
+use dso138_tests::phys::particles::{Particle, ParticleColor};
 use embedded_graphics::pixelcolor::Rgb565;
 use embedded_graphics::prelude::*;
-use embedded_graphics::primitives::Rectangle;
+use embedded_graphics::primitives::{Circle, Rectangle};
 use embedded_graphics::style::PrimitiveStyle;
 use embedded_hal::digital::v2::InputPin;
 use embedded_hal::digital::v2::OutputPin;
@@ -72,6 +73,7 @@ const APP: () = {
         button4: PB15<Input<PullUp>>,
         led: PA15<Output<PushPull>>,
         btmr: CountDownTimer<TIM3>,
+        ball: Particle<f32>,
     }
 
     #[init(schedule = [proc_task])]
@@ -145,6 +147,10 @@ const APP: () = {
 
         display.set_orientation(Orientation::Portrait).unwrap();
 
+        /* create ball */
+
+        let ball = Particle::<f32>::new(120.0, 160.0, 10.0, 15.0, 5.0, 0.1, ParticleColor::Blue);
+
         /* clear screen */
 
         let bg = PrimitiveStyle::with_fill(Rgb565::BLACK);
@@ -167,6 +173,7 @@ const APP: () = {
             button3,
             button4,
             led,
+            ball,
             btmr,
         }
     }
@@ -215,10 +222,15 @@ const APP: () = {
         cx.resources.btmr.clear_update_interrupt_flag();
     }
 
-    #[task(schedule = [proc_task], resources = [display, cb1, cb4, pos])]
+    #[task(schedule = [proc_task], resources = [display, ball, cb1, cb4, pos])]
     fn proc_task(cx: proc_task::Context) {
+        let ground = PrimitiveStyle::with_fill(Rgb565::BLACK);
+        let color1 = PrimitiveStyle::with_fill(Rgb565::GREEN);
+        let color2 = PrimitiveStyle::with_fill(Rgb565::RED);
+        let height = cx.resources.display.height() as i32;
         let width = cx.resources.display.width() as i32;
         let display = cx.resources.display;
+        let ball = cx.resources.ball;
         let old = *cx.resources.pos;
 
         let new = match (*cx.resources.cb1, *cx.resources.cb4) {
@@ -240,9 +252,6 @@ const APP: () = {
         };
 
         if old != new {
-            let ground = PrimitiveStyle::with_fill(Rgb565::BLACK);
-            let color = PrimitiveStyle::with_fill(Rgb565::GREEN);
-
             rprintln!("draw: {} -> {}", old, new);
 
             Rectangle::new(Point::new(old - 20, 0), Point::new(old + 20, 10))
@@ -250,9 +259,28 @@ const APP: () = {
                 .draw(display)
                 .unwrap();
             Rectangle::new(Point::new(new - 20, 0), Point::new(new + 20, 10))
-                .into_styled(color)
+                .into_styled(color1)
                 .draw(display)
                 .unwrap();
+        }
+
+        Rectangle::new(area(ball).0, area(ball).1)
+            .into_styled(ground)
+            .draw(display)
+            .unwrap();
+
+        ball.step();
+
+        Circle::new(
+            Point::new(ball.get_x() as i32, ball.get_y() as i32),
+            ball.get_r() as u32,
+        )
+        .into_styled(color2)
+        .draw(display)
+        .unwrap();
+
+        if Particle::<f32>::bounce(ball, 0.0, width as f32, 0.0, height as f32) {
+            rprintln!("bounce: ({}, {})", ball.get_x(), ball.get_y());
         }
 
         cx.schedule
@@ -265,3 +293,16 @@ const APP: () = {
         fn EXTI2();
     }
 };
+
+fn area(p: &Particle<f32>) -> (Point, Point) {
+    (
+        Point::new(
+            (p.get_x() - p.get_r()) as i32,
+            (p.get_y() - p.get_r()) as i32,
+        ),
+        Point::new(
+            (p.get_x() + p.get_r()) as i32,
+            (p.get_y() + p.get_r()) as i32,
+        ),
+    )
+}
