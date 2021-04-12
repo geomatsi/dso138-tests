@@ -6,6 +6,7 @@ use cortex_m as cm;
 use display_interface_parallel_gpio::PGPIO8BitInterface;
 use dso138_tests::hw::delay_timer::DelayTimer;
 use dso138_tests::phys::particles::{Particle, ParticleColor};
+use dso138_tests::phys::racket::Racket;
 use embedded_graphics::fonts::{Font12x16, Text};
 use embedded_graphics::pixelcolor::Rgb565;
 use embedded_graphics::prelude::*;
@@ -73,7 +74,7 @@ const APP: () = {
         led: PA15<Output<PushPull>>,
         btmr: CountDownTimer<TIM3>,
         ball: Particle<f32>,
-        racket: i32,
+        racket: Racket<f32>,
     }
 
     #[init(schedule = [step_task])]
@@ -151,8 +152,8 @@ const APP: () = {
 
         /* create ball and racket */
 
-        let ball = Particle::<f32>::new(120.0, 160.0, 10.0, -15.0, 5.0, 0.1, ParticleColor::Blue);
-        let racket = 120;
+        let ball = Particle::<f32>::new(120.0, 160.0, 10.0, 5.0, 5.0, 0.1, ParticleColor::Blue);
+        let racket = Racket::<f32>::new(120.0, 5.0, 15.0, 5.0);
 
         /* initial screen */
 
@@ -167,7 +168,7 @@ const APP: () = {
         .draw(&mut display)
         .unwrap();
 
-        Rectangle::new(Point::new(racket - 20, 310), Point::new(racket + 20, 320))
+        Rectangle::new(racket_square(&racket).0, racket_square(&racket).1)
             .into_styled(color)
             .draw(&mut display)
             .unwrap();
@@ -240,44 +241,48 @@ const APP: () = {
         let height = cx.resources.display.height() as i32;
         let width = cx.resources.display.width() as i32;
         let display = cx.resources.display;
+        let racket = cx.resources.racket;
         let ball = cx.resources.ball;
-        let old = *cx.resources.racket;
 
-        let new = match (*cx.resources.cb1, *cx.resources.cb4) {
-            (true, false) => {
-                *cx.resources.racket += 5;
-                if *cx.resources.racket > width {
-                    *cx.resources.racket = width;
-                }
-                *cx.resources.racket
-            }
-            (false, true) => {
-                *cx.resources.racket -= 5;
-                if *cx.resources.racket < 0 {
-                    *cx.resources.racket = 0;
-                }
-                *cx.resources.racket
-            }
-            _ => *cx.resources.racket,
+        let dx: Option<f32> = match (*cx.resources.cb1, *cx.resources.cb4) {
+            (true, false) => Some(5.0),
+            (false, true) => Some(-5.0),
+            _ => None,
         };
 
-        if old != new {
-            Rectangle::new(Point::new(old - 20, 310), Point::new(old + 20, 320))
+        Rectangle::new(ball_square(ball).0, ball_square(ball).1)
+            .into_styled(ground)
+            .draw(display)
+            .unwrap();
+
+        ball.step();
+
+        Rectangle::new(ball_square(ball).0, ball_square(ball).1)
+            .into_styled(color2)
+            .draw(display)
+            .unwrap();
+
+        if let Some(dx) = dx {
+            Rectangle::new(racket_square(racket).0, racket_square(racket).1)
                 .into_styled(ground)
                 .draw(display)
                 .unwrap();
-            Rectangle::new(Point::new(new - 20, 310), Point::new(new + 20, 320))
+
+            racket.step(dx);
+
+            Rectangle::new(racket_square(racket).0, racket_square(racket).1)
                 .into_styled(color1)
                 .draw(display)
                 .unwrap();
         }
 
-        if Particle::<f32>::bounce(ball, 0.0, width as f32, 10.0 + ball.get_r(), height as f32) {
-            rprintln!("bounce: ({}, {})", ball.get_x(), ball.get_y());
+        let ball_bounce = Particle::<f32>::bounce(ball, 0.0, width as f32, 0.0, height as f32);
+        let _racket_bounce = Racket::<f32>::bounce(racket, 0.0, width as f32);
 
-            if (ball.get_y() as i32) >= 310 + (ball.get_r() as i32)
-                && ((ball.get_x() as i32) < (new - 20) || (ball.get_x() as i32) > (new + 20))
-            {
+        if ball_bounce {
+            rprintln!("ball bounced: ({}, {})", ball.get_x(), ball.get_y());
+
+            if score(ball, racket) {
                 let style = TextStyleBuilder::new(Font12x16)
                     .text_color(Rgb565::YELLOW)
                     .background_color(Rgb565::BLACK)
@@ -293,18 +298,6 @@ const APP: () = {
             }
         }
 
-        Rectangle::new(area(ball).0, area(ball).1)
-            .into_styled(ground)
-            .draw(display)
-            .unwrap();
-
-        ball.step();
-
-        Rectangle::new(area(ball).0, area(ball).1)
-            .into_styled(color2)
-            .draw(display)
-            .unwrap();
-
         cx.schedule
             .step_task(cx.scheduled + STEP_PERIOD.cycles())
             .unwrap();
@@ -316,7 +309,7 @@ const APP: () = {
     }
 };
 
-fn area(p: &Particle<f32>) -> (Point, Point) {
+fn ball_square(p: &Particle<f32>) -> (Point, Point) {
     (
         Point::new(
             (p.get_x() - p.get_r()) as i32,
@@ -327,4 +320,27 @@ fn area(p: &Particle<f32>) -> (Point, Point) {
             (p.get_y() + p.get_r()) as i32,
         ),
     )
+}
+
+fn racket_square(r: &Racket<f32>) -> (Point, Point) {
+    (
+        Point::new(
+            (r.get_cx() - r.get_hw()) as i32,
+            (r.get_cy() - r.get_hh()) as i32,
+        ),
+        Point::new(
+            (r.get_cx() + r.get_hw()) as i32,
+            (r.get_cy() + r.get_hh()) as i32,
+        ),
+    )
+}
+
+fn score(b: &Particle<f32>, r: &Racket<f32>) -> bool {
+    if (b.get_y() < (r.get_cy() + r.get_hh() + b.get_r()))
+        && ((b.get_x() < (r.get_cx() - r.get_hw())) || (b.get_x() > (r.get_cx() + r.get_hw())))
+    {
+        return true;
+    }
+
+    false
 }
